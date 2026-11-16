@@ -32,6 +32,7 @@
     </div>
 </div>
 
+<p>Возвращено: {{ summary.completed_count }} · Отменено: {{ summary.cancelled_count }}</p>
 <p>
     Средний срок пользования книгой:
     {{ durations.avg_days|default_if_none:"нет данных" }} дн.,
@@ -44,7 +45,7 @@
     <tbody>
     {% for book in popular_books %}
         <tr>
-            <td><a href="{% url 'books:detail' book.id %}">{{ book.title }}</a></td>
+            <td><a href="{{ book.get_absolute_url }}">{{ book.title }}</a></td>
             <td>{{ book.author }}</td>
             <td>{{ book.loans_count }}</td>
         </tr>

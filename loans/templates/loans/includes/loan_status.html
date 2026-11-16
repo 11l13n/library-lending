@@ -1,5 +1,7 @@
-{% if loan.return_date %}
-    <span class="badge bg-secondary loan-status loan-status-closed">возвращена</span>
+{% if loan.status == 'completed' %}
+    <span class="badge text-bg-success">{{ loan.get_status_display }}</span>
+{% elif loan.status == 'cancelled' %}
+    <span class="badge text-bg-secondary">{{ loan.get_status_display }}</span>
 {% else %}
-    <span class="badge bg-primary loan-status loan-status-active">у читателя</span>
+    <span class="badge text-bg-warning">{{ loan.get_status_display }}</span>
 {% endif %}

@@ -12,7 +12,7 @@
         <h1 class="h3 card-title">Выдача №{{ loan.id }}</h1>
         <p class="card-text">
             <strong>Книга:</strong>
-            <a href="{% url 'books:detail' loan.book_id %}">«{{ loan.book.title }}»</a>,
+            <a href="{{ loan.book.get_absolute_url }}">«{{ loan.book.title }}»</a>,
             {{ loan.book.author }}
         </p>
         <p class="card-text">
@@ -25,7 +25,11 @@
         </p>
         <p class="card-text">
             <strong>Возвращена:</strong>
-            {{ loan.return_date|date:'d.m.Y'|default:"книга у читателя" }}
+            {% if loan.status == 'cancelled' %}
+                Выдача отменена
+            {% else %}
+                {{ loan.return_date|date:'d.m.Y'|default:"книга у читателя" }}
+            {% endif %}
         </p>
         <p class="card-text">
             <strong>Статус:</strong>

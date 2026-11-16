@@ -14,6 +14,7 @@ def register_casefold(sender, connection, **kwargs):
 class BooksConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "books"
+    verbose_name = "Каталог"
 
     def ready(self):
         connection_created.connect(register_casefold)

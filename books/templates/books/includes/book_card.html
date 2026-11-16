@@ -11,7 +11,7 @@
                 <span class="badge bg-success loan-status">доступна</span>
             {% endif %}
             <a
-                href="{% url 'books:detail' book.id %}"
+                href="{{ book.get_absolute_url }}"
                 class="btn btn-sm btn-outline-primary ms-2"
             >Подробнее</a>
         </div>

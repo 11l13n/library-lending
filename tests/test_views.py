@@ -151,13 +151,14 @@ def test_statistics_uses_aggregates_and_having(client):
     response = client.get(reverse("loans:statistics"), {"min": 2})
     assert dict(response.context["summary"]) == {
         "books_count": 4, "readers_count": 3,
-        "loans_count": 4, "issued_count": 2,
+        "loans_count": 4, "issued_count": 2, "completed_count": 2,
+        "cancelled_count": 0,
     }
     assert response.context["durations"]["avg_days"] == 9.5
     assert response.context["active_readers"][0]["name"] == "Иван"
     unused = next(book for book in response.context["popular_books"]
-                  if book["id"] == 4)
-    assert unused["loans_count"] == 0
+                  if book.pk == 4)
+    assert unused.loans_count == 0
     response = client.get(reverse("loans:statistics"), {"min": "invalid"})
     assert response.status_code == 200
     assert response.context["min_loans"] == 2
@@ -193,3 +194,23 @@ def test_loan_filters_sort_and_pagination(client):
     assert "sort=newest&amp;page=2" in response.content.decode()
     response = client.get(reverse("loans:list"), {**filters, "page": 2})
     assert [loan.pk for loan in response.context["loans"]] == [3]
+
+
+def test_cancelled_loan_frees_book_without_changing_historical_returns(client):
+    Loan.objects.filter(pk=3).update(status=Loan.Status.CANCELLED)
+    response = client.get(reverse("books:available"), {"date": "2026-10-01"})
+    assert 1 in {book.pk for book in response.context["books"]}
+    response = client.get(reverse("books:available"), {"date": "2026-09-19"})
+    assert 1 not in {book.pk for book in response.context["books"]}
+    response = client.get(reverse("loans:list"), {"status": "cancelled"})
+    assert [loan.pk for loan in response.context["loans"]] == [3]
+    response = client.get(reverse("loans:statistics"))
+    assert response.context["summary"]["cancelled_count"] == 1
+
+
+def test_unicode_book_url_and_legacy_id(client):
+    book = Book.objects.get(pk=1)
+    assert client.get(book.get_absolute_url()).context["book"] == book
+    assert client.get(reverse("books:detail", args=[1])).status_code == 200
+    missing_url = reverse("books:by-slug", args=["missing"])
+    assert client.get(missing_url).status_code == 404

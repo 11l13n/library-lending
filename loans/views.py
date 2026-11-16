@@ -21,9 +21,15 @@ LOAN_ORDERING = {
 
 
 def loans(request):
-    queryset = Loan.objects.filter(return_date__isnull=True).select_related(
-        "book", "reader",
-    )
+    queryset = Loan.objects.with_people_and_books()
+    status = request.GET.get("status", Loan.Status.ACTIVE)
+    if status == Loan.Status.COMPLETED:
+        queryset = queryset.completed()
+    elif status == Loan.Status.CANCELLED:
+        queryset = queryset.cancelled()
+    elif status != "all":
+        status = Loan.Status.ACTIVE
+        queryset = queryset.active()
     issue_date = parse_iso_date(request.GET.get("date"), None)
     book = request.GET.get("book", "").strip()
     reader = request.GET.get("reader", "").strip()
@@ -50,15 +56,14 @@ def loans(request):
     return render(request, "loans/loan_list.html", {
         "loans": page.object_list, "page_obj": page, "issue_date": issue_date,
         "book_query": book, "reader_query": reader, "order": order,
+        "status": status, "status_choices": Loan.Status.choices,
     })
 
 
 def overdue(request):
     check_date = parse_iso_date(request.GET.get("date"), timezone.localdate())
-    loans_list = list(Loan.objects.filter(
-        Q(return_date__isnull=True) | Q(return_date__gt=check_date),
-        issue_date__lte=check_date,
-    ).select_related("book", "reader").annotate(
+    blocking = Loan.objects.blocking_on(check_date).with_people_and_books()
+    loans_list = list(blocking.annotate(
         overdue_days=overdue_days_expression(
             Value(check_date), F("issue_date"),
         ),
@@ -72,11 +77,8 @@ def overdue(request):
 
 def loan_detail(request, loan_id):
     today = timezone.localdate()
-    loan = Loan.objects.select_related("book", "reader").annotate(
-        overdue_days=overdue_days_expression(
-            Coalesce("return_date", Value(today)), F("issue_date"),
-        ),
-        fine=F("overdue_days") * int(FINE_PER_DAY),
+    loan = Loan.objects.with_people_and_books().with_penalty(
+        today,
     ).filter(pk=loan_id).first()
     return render(request, "loans/loan_detail.html", {"loan": loan},
                   status=200 if loan else 404)
@@ -89,8 +91,11 @@ def readers(request):
     )
     readers_list = Reader.objects.annotate(
         loans_count=Count("loans"),
-        on_hands=Count("loans", filter=Q(loans__return_date__isnull=True)),
-        fine=Sum(overdue_days, default=0) * int(FINE_PER_DAY),
+        on_hands=Count("loans", filter=Q(loans__status=Loan.Status.ACTIVE)),
+        fine=Sum(
+            overdue_days, filter=~Q(loans__status=Loan.Status.CANCELLED),
+            default=0,
+        ) * int(FINE_PER_DAY),
     ).order_by("-loans_count", "name", "id").values(
         "id", "name", "ticket", "loans_count", "on_hands", "fine",
     )
@@ -104,19 +109,19 @@ def statistics(request):
         min_loans = 2
     summary = Loan.objects.aggregate(
         loans_count=Count("pk"),
-        issued_count=Count("pk", filter=Q(return_date__isnull=True)),
+        issued_count=Count("pk", filter=Q(status=Loan.Status.ACTIVE)),
+        completed_count=Count("pk", filter=Q(status=Loan.Status.COMPLETED)),
+        cancelled_count=Count("pk", filter=Q(status=Loan.Status.CANCELLED)),
     )
     summary.update(books_count=Book.objects.count(),
                    readers_count=Reader.objects.count())
-    durations = Loan.objects.exclude(return_date=None).annotate(
+    durations = Loan.objects.completed().annotate(
         duration_days=days_between(F("return_date"), F("issue_date")),
     ).aggregate(avg_days=Round(Avg("duration_days"), 1),
                 max_days=Max("duration_days"))
     popular_books = Book.objects.annotate(
         loans_count=Count("loans"),
-    ).order_by("-loans_count", "title", "id").values(
-        "id", "title", "author", "loans_count",
-    )
+    ).order_by("-loans_count", "title", "id")
     by_month = Loan.objects.annotate(month=TruncMonth("issue_date")).values(
         "month",
     ).annotate(loans_count=Count("pk")).order_by("month")

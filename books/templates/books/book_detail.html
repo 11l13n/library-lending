@@ -37,7 +37,7 @@
             <td><a href="{% url 'loans:detail' loan.id %}">{{ loan.id }}</a></td>
             <td>{{ loan.reader.name }}</td>
             <td>{{ loan.issue_date|date:'d.m.Y' }}</td>
-            <td>{{ loan.return_date|date:'d.m.Y'|default:"у читателя" }}</td>
+            <td>{% if loan.status == 'cancelled' %}отменена{% else %}{{ loan.return_date|date:'d.m.Y'|default:"у читателя" }}{% endif %}</td>
         </tr>
     {% empty %}
         <tr><td colspan="4">Книгу ещё не выдавали.</td></tr>

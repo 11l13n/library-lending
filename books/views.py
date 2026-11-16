@@ -11,9 +11,7 @@ from .models import Book, Casefold
 
 
 def books(request):
-    active_loans = Loan.objects.filter(
-        book_id=OuterRef("pk"), return_date__isnull=True,
-    )
+    active_loans = Loan.objects.active().filter(book_id=OuterRef("pk"))
     books_list = list(Book.objects.annotate(
         is_issued=Exists(active_loans),
     ).order_by("title", "id"))
@@ -41,9 +39,8 @@ def search(request):
 
 def available(request):
     check_date = parse_iso_date(request.GET.get("date"), timezone.localdate())
-    occupied = Loan.objects.filter(
-        Q(return_date__isnull=True) | Q(return_date__gt=check_date),
-        book_id=OuterRef("pk"), issue_date__lte=check_date,
+    occupied = Loan.objects.blocking_on(check_date).filter(
+        book_id=OuterRef("pk"),
     )
     books_list = Book.objects.exclude(Exists(occupied)).order_by("title", "id")
     return render(request, "books/available.html", {
@@ -51,15 +48,16 @@ def available(request):
     })
 
 
-def book_detail(request, book_id):
-    book = Book.objects.filter(pk=book_id).first()
+def book_detail(request, book_id=None, slug=None):
+    lookup = {"slug": slug} if slug is not None else {"pk": book_id}
+    book = Book.objects.filter(**lookup).first()
     history = []
     if book:
         history = list(book.loans.select_related("reader").order_by(
             "-issue_date", "-id",
         ))
     active_loan = next(
-        (loan for loan in history if loan.return_date is None), None,
+        (loan for loan in history if loan.status == Loan.Status.ACTIVE), None,
     )
     return render(request, "books/book_detail.html", {
         "book": book, "history": history, "active_loan": active_loan,

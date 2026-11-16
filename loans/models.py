@@ -2,10 +2,10 @@
 
 from django.db import models
 from django.db.models import F, Q, Value
-from django.db.models.functions import Cast, Greatest
+from django.db.models.functions import Cast, Coalesce, Greatest
 
 from books.models import Book
-from models.loans import LOAN_PERIOD_DAYS, calculate_due_date
+from models.loans import FINE_PER_DAY, LOAN_PERIOD_DAYS, calculate_due_date
 
 MICROSECONDS_PER_DAY = 86_400_000_000
 
@@ -34,7 +34,48 @@ class Reader(models.Model):
         return f"{self.name} ({self.ticket})"
 
 
+class LoanStatus(models.TextChoices):
+    ACTIVE = "active", "У читателя"
+    COMPLETED = "completed", "Возвращена"
+    CANCELLED = "cancelled", "Отменена"
+
+
+class LoanQuerySet(models.QuerySet):
+    def active(self):
+        return self.filter(status=LoanStatus.ACTIVE)
+
+    def completed(self):
+        return self.filter(status=LoanStatus.COMPLETED)
+
+    def cancelled(self):
+        return self.filter(status=LoanStatus.CANCELLED)
+
+    def blocking_on(self, day):
+        return self.filter(
+            Q(status=LoanStatus.ACTIVE)
+            | Q(status=LoanStatus.COMPLETED, return_date__gt=day),
+            issue_date__lte=day,
+        )
+
+    def with_people_and_books(self):
+        return self.select_related("book", "reader")
+
+    def with_penalty(self, day):
+        return self.annotate(
+            overdue_days=models.Case(
+                models.When(status=LoanStatus.CANCELLED, then=Value(0)),
+                default=overdue_days_expression(
+                    Coalesce("return_date", Value(day)), F("issue_date"),
+                ),
+            ),
+            fine=F("overdue_days") * int(FINE_PER_DAY),
+        )
+
+
 class Loan(models.Model):
+    Status = LoanStatus
+    objects = LoanQuerySet.as_manager()
+
     book = models.ForeignKey(
         Book, on_delete=models.PROTECT, related_name="loans",
         verbose_name="книга",
@@ -45,6 +86,9 @@ class Loan(models.Model):
     )
     issue_date = models.DateField("дата выдачи")
     return_date = models.DateField("дата возврата", null=True, blank=True)
+    status = models.CharField(
+        "статус", max_length=9, choices=Status.choices, default=Status.ACTIVE,
+    )
 
     class Meta:
         verbose_name = "выдача"
@@ -54,6 +98,16 @@ class Loan(models.Model):
                 condition=Q(return_date__isnull=True)
                 | Q(return_date__gte=F("issue_date")),
                 name="loan_return_on_or_after_issue",
+            ),
+            models.CheckConstraint(
+                condition=Q(status="completed", return_date__isnull=False)
+                | Q(status__in=["active", "cancelled"],
+                    return_date__isnull=True),
+                name="loan_status_matches_return",
+            ),
+            models.UniqueConstraint(
+                fields=["book"], condition=Q(status="active"),
+                name="loan_unique_active_book",
             ),
         ]
 

@@ -57,7 +57,12 @@ class Command(BaseCommand):
                     fields["return_date"] = date.fromisoformat(
                         fields["return_date"],
                     )
-            obj, created = model.objects.get_or_create(pk=pk, defaults=fields)
+            defaults = fields.copy()
+            if model is Loan and fields["return_date"] is not None:
+                defaults["status"] = Loan.Status.COMPLETED
+            obj, created = model.objects.get_or_create(
+                pk=pk, defaults=defaults,
+            )
             if not created and any(
                 getattr(obj, key) != value for key, value in fields.items()
             ):
