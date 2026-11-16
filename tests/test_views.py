@@ -214,3 +214,90 @@ def test_unicode_book_url_and_legacy_id(client):
     assert client.get(reverse("books:detail", args=[1])).status_code == 200
     missing_url = reverse("books:by-slug", args=["missing"])
     assert client.get(missing_url).status_code == 404
+
+
+def test_loan_filter_displays_invalid_date(client):
+    response = client.get(reverse("loans:list"), {"date": "2026-02-30"})
+    assert response.context["form"].has_error("date", "invalid")
+    assert not response.context["loans"]
+
+
+@pytest.mark.parametrize("invalid_date", [
+    "", "2026-02-30", "2026-10-19", "9999-12-31",
+])
+def test_loan_form_rejects_invalid_date(client, invalid_date):
+    before = Loan.objects.count()
+    response = client.post(reverse("loans:create"), {
+        "book": 4, "reader": 1, "issue_date": invalid_date,
+    })
+    assert response.status_code == 200
+    assert "issue_date" in response.context["form"].errors
+    assert Loan.objects.count() == before
+
+
+def test_loan_form_rejects_occupied_book_and_missing_fields(client):
+    url = reverse("loans:create")
+    payload = {"book": 2, "reader": 1, "issue_date": "2026-10-20"}
+    response = client.post(url, payload)
+    assert "book" in response.context["form"].errors
+    response = client.post(url, {**payload, "book": 4, "reader": ""})
+    assert response.context["form"].has_error("reader", "required")
+    assert not Loan.objects.filter(book_id=4).exists()
+
+
+def test_loan_creation_edit_cancellation_and_book_reuse(client):
+    create_url = reverse("loans:create")
+    payload = {"book": 4, "reader": 1, "issue_date": "2026-10-20"}
+    assert client.get(create_url).status_code == 200
+    response = client.post(create_url, payload)
+    loan = Loan.objects.get(book_id=4)
+    detail_url = reverse("loans:detail", args=[loan.pk])
+    assert response.url == detail_url
+    assert loan.status == Loan.Status.ACTIVE
+    edit_url = reverse("loans:edit", args=[loan.pk])
+    assert client.get(edit_url).context["form"].instance == loan
+    response = client.post(edit_url, {**payload, "reader": 2})
+    assert response.url == detail_url
+    loan.refresh_from_db()
+    assert loan.reader_id == 2
+    assert client.post(
+        edit_url, {**payload, "book": 2},
+    ).context["form"].has_error("book")
+    cancel_url = reverse("loans:cancel", args=[loan.pk])
+    assert client.get(cancel_url).status_code == 405
+    assert Loan.objects.active().filter(pk=loan.pk).exists()
+    assert client.post(cancel_url).url == detail_url
+    assert client.post(cancel_url).url == detail_url
+    assert Loan.objects.cancelled().filter(pk=loan.pk).exists()
+    assert client.get(edit_url).status_code == 404
+    assert client.post(create_url, payload).status_code == 302
+    assert Loan.objects.active().filter(book_id=4).count() == 1
+
+
+def test_edit_keeps_original_past_date_and_rejects_past_change(client):
+    url = reverse("loans:edit", args=[2])
+    payload = {"book": 2, "reader": 2, "issue_date": "2026-09-10"}
+    assert client.post(url, payload).status_code == 302
+    response = client.post(url, {**payload, "issue_date": "2026-09-11"})
+    assert response.context["form"].has_error("issue_date")
+    assert Loan.objects.get(pk=2).issue_date == date(2026, 9, 10)
+
+
+def test_loan_post_requires_csrf_token(client):
+    secured = Client(enforce_csrf_checks=True)
+    create_url = reverse("loans:create")
+    cancel_url = reverse("loans:cancel", args=[2])
+    assert secured.post(create_url).status_code == 403
+    assert secured.post(cancel_url).status_code == 403
+    assert Loan.objects.active().filter(pk=2).exists()
+    detail_url = reverse("loans:detail", args=[2])
+    assert secured.get(detail_url).status_code == 200
+    token = secured.cookies["csrftoken"].value
+    assert secured.post(
+        cancel_url, {"csrfmiddlewaretoken": token},
+    ).status_code == 302
+
+
+def test_missing_loan_edit_and_cancel_return_404(client):
+    assert client.get(reverse("loans:edit", args=[999])).status_code == 404
+    assert client.post(reverse("loans:cancel", args=[999])).status_code == 404

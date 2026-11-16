@@ -1,5 +1,8 @@
 """Модели читателей и выдач."""
 
+from datetime import date, timedelta
+
+from django.core.validators import MaxValueValidator
 from django.db import models
 from django.db.models import F, Q, Value
 from django.db.models.functions import Cast, Coalesce, Greatest
@@ -8,6 +11,7 @@ from books.models import Book
 from models.loans import FINE_PER_DAY, LOAN_PERIOD_DAYS, calculate_due_date
 
 MICROSECONDS_PER_DAY = 86_400_000_000
+MAX_ISSUE_DATE = date.max - timedelta(days=LOAN_PERIOD_DAYS)
 
 
 def days_between(end, start):
@@ -84,7 +88,9 @@ class Loan(models.Model):
         Reader, on_delete=models.PROTECT, related_name="loans",
         verbose_name="читатель",
     )
-    issue_date = models.DateField("дата выдачи")
+    issue_date = models.DateField(
+        "дата выдачи", validators=[MaxValueValidator(MAX_ISSUE_DATE)],
+    )
     return_date = models.DateField("дата возврата", null=True, blank=True)
     status = models.CharField(
         "статус", max_length=9, choices=Status.choices, default=Status.ACTIVE,

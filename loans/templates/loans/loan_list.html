@@ -6,37 +6,17 @@
 <h1>Выдачи</h1>
 {% include "loans/includes/loan_menu.html" %}
 <form method="get" class="row g-2 mb-3">
-    <div class="col-sm">
-        <label class="form-label" for="id_date">Дата выдачи</label>
-        <input class="form-control" type="date" id="id_date" name="date" value="{{ issue_date|date:'Y-m-d' }}">
-    </div>
-    <div class="col-sm">
-        <label class="form-label" for="id_book">Книга</label>
-        <input class="form-control" id="id_book" name="book" value="{{ book_query }}">
-    </div>
-    <div class="col-sm">
-        <label class="form-label" for="id_reader">Читатель или билет</label>
-        <input class="form-control" id="id_reader" name="reader" value="{{ reader_query }}">
-    </div>
-    <div class="col-sm">
-        <label class="form-label" for="id_sort">Сортировка</label>
-        <select class="form-select" id="id_sort" name="sort">
-            <option value="oldest">Сначала ранние</option>
-            <option value="newest"{% if order == 'newest' %} selected{% endif %}>Сначала новые</option>
-            <option value="book"{% if order == 'book' %} selected{% endif %}>По книге</option>
-            <option value="reader"{% if order == 'reader' %} selected{% endif %}>По читателю</option>
-        </select>
-    </div>
-    <div class="col-sm">
-        <label class="form-label" for="id_status">Статус</label>
-        <select class="form-select" id="id_status" name="status">
-            <option value="all"{% if status == 'all' %} selected{% endif %}>Все</option>
-            {% for value, label in status_choices %}
-                <option value="{{ value }}"{% if value == status %} selected{% endif %}>{{ label }}</option>
+    {% for field in form %}
+        <div class="col-sm">
+            <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% for error in field.errors %}
+                <div class="text-danger small">{{ error }}</div>
             {% endfor %}
-        </select>
-    </div>
-    <div class="col-auto align-self-end">
+        </div>
+    {% endfor %}
+    <div class="col-auto align-self-start">
+        <div class="d-none d-sm-block mb-2" aria-hidden="true">&nbsp;</div>
         <button class="btn btn-primary" type="submit">Применить</button>
         <a class="btn btn-outline-secondary" href="{% url 'loans:list' %}">Сбросить</a>
     </div>

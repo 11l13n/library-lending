@@ -1,39 +1,37 @@
 """Страницы выдач, читателей и статистики."""
 
 from django.core.paginator import Paginator
+from django.db import IntegrityError, transaction
 from django.db.models import Avg, Count, F, Max, Q, Sum, Value
 from django.db.models.functions import Coalesce, Round, TruncMonth
-from django.shortcuts import render
+from django.http import Http404
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.http import require_POST, require_http_methods
 
 from books.models import Book, Casefold
 from models.loans import FINE_PER_DAY
 from utils import parse_iso_date
 
+from .forms import LOAN_SORTS, LoanFilterForm, LoanForm
 from .models import Loan, Reader, days_between, overdue_days_expression
-
-LOAN_ORDERING = {
-    "oldest": ("issue_date", "id"),
-    "newest": ("-issue_date", "-id"),
-    "book": ("book__title", "id"),
-    "reader": ("reader__name", "id"),
-}
 
 
 def loans(request):
+    form = LoanFilterForm(request.GET or None)
     queryset = Loan.objects.with_people_and_books()
-    status = request.GET.get("status", Loan.Status.ACTIVE)
+    filters = form.cleaned_data if form.is_valid() else {}
+    status = filters.get("status") or Loan.Status.ACTIVE
     if status == Loan.Status.COMPLETED:
         queryset = queryset.completed()
     elif status == Loan.Status.CANCELLED:
         queryset = queryset.cancelled()
     elif status != "all":
-        status = Loan.Status.ACTIVE
         queryset = queryset.active()
-    issue_date = parse_iso_date(request.GET.get("date"), None)
-    book = request.GET.get("book", "").strip()
-    reader = request.GET.get("reader", "").strip()
-    order = request.GET.get("sort", "oldest")
+
+    issue_date = filters.get("date")
+    book = filters.get("book")
+    reader = filters.get("reader")
     if issue_date:
         queryset = queryset.filter(issue_date=issue_date)
     if book:
@@ -48,16 +46,59 @@ def loans(request):
             Q(folded_reader__contains=reader.casefold())
             | Q(folded_ticket__contains=reader.casefold()),
         )
-    if order not in LOAN_ORDERING:
-        order = "oldest"
-    page = Paginator(queryset.order_by(*LOAN_ORDERING[order]), 10).get_page(
+    if form.errors:
+        queryset = queryset.none()
+
+    sort = filters.get("sort") or "oldest"
+    page = Paginator(queryset.order_by(*LOAN_SORTS[sort][1]), 10).get_page(
         request.GET.get("page"),
     )
     return render(request, "loans/loan_list.html", {
-        "loans": page.object_list, "page_obj": page, "issue_date": issue_date,
-        "book_query": book, "reader_query": reader, "order": order,
-        "status": status, "status_choices": Loan.Status.choices,
+        "loans": page.object_list, "page_obj": page, "form": form,
     })
+
+
+@require_http_methods(["GET", "POST"])
+def loan_form(request, loan_id=None):
+    loan = None
+    if loan_id is not None:
+        loan = get_object_or_404(Loan.objects.active(), pk=loan_id)
+    data = request.POST if request.method == "POST" else None
+    form = LoanForm(data, instance=loan, initial={
+        "issue_date": loan.issue_date if loan else timezone.localdate(),
+    })
+    if request.method == "POST" and form.is_valid():
+        updated = form.save(commit=False)
+        try:
+            with transaction.atomic():
+                if loan_id is None:
+                    updated.save()
+                else:
+                    saved = Loan.objects.active().filter(pk=loan_id).update(
+                        book=updated.book, reader=updated.reader,
+                        issue_date=updated.issue_date,
+                    )
+                    if not saved:
+                        raise Http404("Активная выдача не найдена.")
+        except IntegrityError:
+            conflicts = Loan.objects.active().filter(book=updated.book)
+            if not conflicts.exclude(pk=loan_id).exists():
+                raise
+            form.add_error("book", "Книга уже выдана на выбранный период.")
+        else:
+            return redirect("loans:detail", loan_id=updated.pk)
+    return render(request, "loans/loan_form.html", {
+        "form": form, "loan_id": loan_id,
+    })
+
+
+@require_POST
+def cancel_loan(request, loan_id):
+    loan = get_object_or_404(Loan, pk=loan_id)
+    Loan.objects.active().filter(pk=loan.pk).update(
+        status=Loan.Status.CANCELLED,
+    )
+    return redirect("loans:detail", loan_id=loan.pk)
 
 
 def overdue(request):

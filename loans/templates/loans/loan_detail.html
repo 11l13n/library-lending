@@ -7,6 +7,7 @@
 
 {% block content %}
 {% if loan %}
+{% include "loans/includes/loan_menu.html" %}
 <div class="card loan-card">
     <div class="card-body">
         <h1 class="h3 card-title">Выдача №{{ loan.id }}</h1>
@@ -42,6 +43,15 @@
         </p>
         {% else %}
         <p class="card-text">Просрочки нет.</p>
+        {% endif %}
+        {% if loan.status == 'active' %}
+            <div class="d-flex flex-wrap gap-2 mt-3">
+                <a class="btn btn-primary" href="{% url 'loans:edit' loan.id %}">Редактировать</a>
+                <form method="post" action="{% url 'loans:cancel' loan.id %}">
+                    {% csrf_token %}
+                    <button class="btn btn-outline-danger" type="submit">Отменить выдачу</button>
+                </form>
+            </div>
         {% endif %}
     </div>
 </div>
