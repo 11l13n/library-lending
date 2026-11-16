@@ -1,0 +1,86 @@
+[
+    {
+        "id": 1,
+        "book_id": 1,
+        "reader_id": 1,
+        "issue_date": "2026-09-01",
+        "return_date": "2026-09-20"
+    },
+    {
+        "id": 2,
+        "book_id": 2,
+        "reader_id": 2,
+        "issue_date": "2026-09-10",
+        "return_date": "2026-10-24"
+    },
+    {
+        "id": 3,
+        "book_id": 4,
+        "reader_id": 1,
+        "issue_date": "2026-10-15",
+        "return_date": null
+    },
+    {
+        "id": 4,
+        "book_id": 1,
+        "reader_id": 3,
+        "issue_date": "2026-09-25",
+        "return_date": "2026-10-05"
+    },
+    {
+        "id": 5,
+        "book_id": 5,
+        "reader_id": 1,
+        "issue_date": "2026-09-03",
+        "return_date": "2026-09-12"
+    },
+    {
+        "id": 6,
+        "book_id": 7,
+        "reader_id": 4,
+        "issue_date": "2026-09-15",
+        "return_date": "2026-09-29"
+    },
+    {
+        "id": 7,
+        "book_id": 3,
+        "reader_id": 4,
+        "issue_date": "2026-10-01",
+        "return_date": null
+    },
+    {
+        "id": 8,
+        "book_id": 1,
+        "reader_id": 4,
+        "issue_date": "2026-10-10",
+        "return_date": null
+    },
+    {
+        "id": 9,
+        "book_id": 6,
+        "reader_id": 1,
+        "issue_date": "2026-10-02",
+        "return_date": "2026-10-14"
+    },
+    {
+        "id": 10,
+        "book_id": 8,
+        "reader_id": 2,
+        "issue_date": "2026-10-20",
+        "return_date": null
+    },
+    {
+        "id": 11,
+        "book_id": 5,
+        "reader_id": 3,
+        "issue_date": "2026-09-20",
+        "return_date": "2026-10-12"
+    },
+    {
+        "id": 12,
+        "book_id": 7,
+        "reader_id": 1,
+        "issue_date": "2026-10-16",
+        "return_date": "2026-10-21"
+    }
+]

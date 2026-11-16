@@ -1,0 +1,5 @@
+{% if loan.return_date %}
+    <span class="badge bg-secondary loan-status loan-status-closed">возвращена</span>
+{% else %}
+    <span class="badge bg-primary loan-status loan-status-active">у читателя</span>
+{% endif %}

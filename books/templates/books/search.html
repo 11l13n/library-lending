@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Поиск книги – Учёт выдачи книг{% endblock %}
+
+{% block content %}
+<h1>Поиск книги</h1>
+{% include "books/includes/book_menu.html" %}
+<form method="get" class="row g-2 mb-4">
+    <div class="col-sm-8">
+        <label for="q" class="visually-hidden">Название или автор</label>
+        <input
+            type="search"
+            id="q"
+            name="q"
+            value="{{ query }}"
+            class="form-control"
+            placeholder="Название или автор, например: пушкин"
+        >
+    </div>
+    <div class="col-sm-4">
+        <button type="submit" class="btn btn-primary">Найти</button>
+    </div>
+</form>
+{% if query %}
+    <h2 class="h5">Результаты по запросу «{{ query }}»: {{ books|length }}</h2>
+    {% for book in books %}
+        {% include "books/includes/book_card.html" %}
+    {% empty %}
+        <p>Ничего не найдено.</p>
+    {% endfor %}
+{% endif %}
+{% endblock %}

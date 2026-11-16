@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}Статистика – Учёт выдачи книг{% endblock %}
+
+{% block content %}
+<h1>Статистика</h1>
+
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="stat-tile">
+            <div class="stat-value">{{ summary.books_count }}</div>
+            <div>книг в каталоге</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-tile">
+            <div class="stat-value">{{ summary.readers_count }}</div>
+            <div>читателей</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-tile">
+            <div class="stat-value">{{ summary.loans_count }}</div>
+            <div>выдач всего</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-tile">
+            <div class="stat-value">{{ summary.issued_count }}</div>
+            <div>книг на руках</div>
+        </div>
+    </div>
+</div>
+
+<p>
+    Средний срок пользования книгой:
+    {{ durations.avg_days|default_if_none:"нет данных" }} дн.,
+    самый долгий: {% if durations.max_days != None %}{{ durations.max_days|floatformat:0 }}{% else %}нет данных{% endif %} дн.
+</p>
+
+<h2 class="h4">Популярность книг</h2>
+<table class="table">
+    <thead><tr><th>Книга</th><th>Автор</th><th>Выдач</th></tr></thead>
+    <tbody>
+    {% for book in popular_books %}
+        <tr>
+            <td><a href="{% url 'books:detail' book.id %}">{{ book.title }}</a></td>
+            <td>{{ book.author }}</td>
+            <td>{{ book.loans_count }}</td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="3">Данные отсутствуют.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<div class="row">
+    <div class="col-md-6">
+        <h2 class="h4">Выдачи по месяцам</h2>
+        <ul class="list-group mb-4">
+        {% for item in by_month %}
+            <li class="list-group-item d-flex justify-content-between">
+                {{ item.month }} <span>{{ item.loans_count }}</span>
+            </li>
+        {% empty %}
+            <li class="list-group-item">Данные отсутствуют.</li>
+        {% endfor %}
+        </ul>
+    </div>
+    <div class="col-md-6">
+        <h2 class="h4">Авторы, которых брали чаще одного раза</h2>
+        <ul class="list-group mb-4">
+        {% for item in popular_authors %}
+            <li class="list-group-item d-flex justify-content-between">
+                {{ item.author }} <span>{{ item.loans_count }}</span>
+            </li>
+        {% empty %}
+            <li class="list-group-item">Таких авторов пока нет.</li>
+        {% endfor %}
+        </ul>
+    </div>
+</div>
+
+<h2 class="h4">Самые активные читатели</h2>
+<form method="get" class="row g-2 mb-3">
+    <div class="col-auto">
+        <label for="min" class="col-form-label">Взяли книг больше, чем</label>
+    </div>
+    <div class="col-auto">
+        <input
+            type="number"
+            id="min"
+            name="min"
+            min="0"
+            value="{{ min_loans }}"
+            class="form-control"
+        >
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-primary">Показать</button>
+    </div>
+</form>
+<ul class="list-group">
+{% for reader in active_readers %}
+    <li class="list-group-item d-flex justify-content-between">
+        {{ reader.name }} <span>{{ reader.loans_count }}</span>
+    </li>
+{% empty %}
+    <li class="list-group-item">Таких читателей нет.</li>
+{% endfor %}
+</ul>
+{% endblock %}

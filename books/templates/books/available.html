@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Доступные книги – Учёт выдачи книг{% endblock %}
+
+{% block content %}
+<h1>Доступные для выдачи книги</h1>
+{% include "books/includes/book_menu.html" %}
+<form method="get" class="row g-2 mb-4">
+    <div class="col-auto">
+        <label for="date" class="col-form-label">На дату:</label>
+    </div>
+    <div class="col-auto">
+        <input type="date" id="date" name="date"
+               value="{{ check_date|date:'Y-m-d' }}" class="form-control">
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-primary">Показать</button>
+    </div>
+</form>
+<p>На {{ check_date|date:"d.m.Y" }} свободных экземпляров: {{ books|length }}</p>
+<p class="text-muted">
+    Доступность определяется по истории выдач и фактических возвратов.
+    Для будущих дат незавершённая выдача считается продолжающейся.
+</p>
+{% for book in books %}
+    {% include "books/includes/book_card.html" %}
+{% empty %}
+    <p>На выбранную дату доступных книг нет.</p>
+{% endfor %}
+{% endblock %}

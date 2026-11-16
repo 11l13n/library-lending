@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Читатели – Учёт выдачи книг{% endblock %}
+
+{% block content %}
+<h1>Читатели</h1>
+<p>Зарегистрировано читателей: {{ readers|length }}</p>
+<div class="table-responsive">
+<table class="table align-middle">
+    <thead>
+        <tr>
+            <th>Читатель</th>
+            <th>Билет</th>
+            <th>Всего выдач</th>
+            <th>Книг на руках</th>
+            <th>Штрафы, руб.</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for reader in readers %}
+        <tr>
+            <td>{{ reader.name }}</td>
+            <td>{{ reader.ticket }}</td>
+            <td>{{ reader.loans_count }}</td>
+            <td>{{ reader.on_hands }}</td>
+            <td>
+                {% if reader.fine %}
+                    <span class="text-danger">{{ reader.fine }}</span>
+                {% else %}
+                    0
+                {% endif %}
+            </td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="5">Читателей нет.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+<p class="text-muted">
+    Штраф считается по всем выдачам: для невозвращённых книг – на сегодня.
+</p>
+{% endblock %}

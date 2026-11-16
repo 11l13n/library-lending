@@ -1,0 +1,94 @@
+/* Собственное оформление проекта «Учёт выдачи книг». */
+
+:root {
+    --library-green: #2f5d50;
+    --library-paper: #f7f3ea;
+    --library-gold: #c8a24a;
+}
+
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--library-paper);
+}
+
+main {
+    flex: 1;
+    padding-bottom: 2rem;
+}
+
+.site-header {
+    background-color: var(--library-green);
+    margin-bottom: 1.5rem;
+    padding: 0.5rem 0;
+}
+
+.site-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: #fff;
+    font-weight: 600;
+    text-decoration: none;
+    margin-right: 1.5rem;
+}
+
+.site-logo {
+    width: 48px;
+    height: 48px;
+}
+
+.site-nav .nav-link {
+    color: #fff;
+}
+
+.site-nav .nav-link:hover {
+    color: var(--library-gold);
+}
+
+.hero {
+    padding: 2rem;
+    background-color: #fff;
+    border-left: 6px solid var(--library-gold);
+    border-radius: 8px;
+}
+
+.book-card,
+.loan-card {
+    border-left: 4px solid var(--library-green);
+    border-radius: 8px;
+}
+
+.loan-status {
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.site-footer {
+    color: #6c757d;
+    border-top: 1px solid #ddd;
+    padding-top: 1rem;
+}
+
+.section-menu .nav-link {
+    color: var(--library-green);
+}
+
+.stat-tile {
+    background-color: #fff;
+    border-radius: 8px;
+    border-top: 4px solid var(--library-gold);
+    padding: 1rem;
+    text-align: center;
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--library-green);
+}
+
+.overdue-row td {
+    color: #a12622;
+}

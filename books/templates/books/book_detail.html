@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {% if book %}{{ book.title }}{% else %}Книга не найдена{% endif %}
+    – Учёт выдачи книг
+{% endblock %}
+
+{% block content %}
+{% if book %}
+<div class="card book-card mb-4">
+    <div class="card-body">
+        <h1 class="h3 card-title">{{ book.title }}</h1>
+        <p class="card-text"><strong>Автор:</strong> {{ book.author }}</p>
+        <p class="card-text"><strong>Инвентарный №:</strong> {{ book.id }}</p>
+        <p class="card-text">
+            <strong>Состояние:</strong>
+            {% if active_loan %}
+                <span class="badge bg-warning text-dark loan-status">выдана</span>
+                читателю {{ active_loan.reader_name }},
+                вернуть до {{ active_loan.due_date }}
+                (<a href="{% url 'loans:detail' active_loan.id %}">выдача №{{ active_loan.id }}</a>)
+            {% else %}
+                <span class="badge bg-success loan-status">доступна для выдачи</span>
+            {% endif %}
+        </p>
+    </div>
+</div>
+<h2 class="h4">История выдач ({{ history|length }})</h2>
+<div class="table-responsive">
+<table class="table align-middle">
+    <thead>
+        <tr><th>№</th><th>Читатель</th><th>Выдана</th><th>Возвращена</th></tr>
+    </thead>
+    <tbody>
+    {% for loan in history %}
+        <tr>
+            <td><a href="{% url 'loans:detail' loan.id %}">{{ loan.id }}</a></td>
+            <td>{{ loan.reader_name }}</td>
+            <td>{{ loan.issue_date }}</td>
+            <td>{{ loan.return_date|default:"у читателя" }}</td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="4">Книгу ещё не выдавали.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% else %}
+<h1 class="text-danger">Книга не найдена</h1>
+<p>Книги с указанным номером нет в каталоге.</p>
+{% endif %}
+<a href="{% url 'books:list' %}" class="btn btn-outline-secondary mt-3">
+    ← к каталогу
+</a>
+{% endblock %}

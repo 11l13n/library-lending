@@ -29,3 +29,9 @@ Thumbs.db
 # Temporary files
 *.log
 *.tmp
+
+# Local databases (recreated from JSON and Django migrations)
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*

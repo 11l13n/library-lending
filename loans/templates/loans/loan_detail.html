@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {% if loan %}Выдача №{{ loan.id }}{% else %}Выдача не найдена{% endif %}
+    – Учёт выдачи книг
+{% endblock %}
+
+{% block content %}
+{% if loan %}
+<div class="card loan-card">
+    <div class="card-body">
+        <h1 class="h3 card-title">Выдача №{{ loan.id }}</h1>
+        <p class="card-text">
+            <strong>Книга:</strong>
+            <a href="{% url 'books:detail' loan.book_id %}">«{{ loan.book_title }}»</a>,
+            {{ loan.author }}
+        </p>
+        <p class="card-text">
+            <strong>Читатель:</strong> {{ loan.reader_name }}
+            (билет {{ loan.ticket }})
+        </p>
+        <p class="card-text">
+            <strong>Выдана:</strong> {{ loan.issue_date }},
+            <strong>вернуть до:</strong> {{ loan.due_date }}
+        </p>
+        <p class="card-text">
+            <strong>Возвращена:</strong>
+            {{ loan.return_date|default:"книга у читателя" }}
+        </p>
+        <p class="card-text">
+            <strong>Статус:</strong>
+            {% include "loans/includes/loan_status.html" %}
+        </p>
+        {% if loan.overdue_days %}
+        <p class="card-text text-danger">
+            Просрочка {{ loan.overdue_days }} дн.,
+            штраф {% widthratio loan.overdue_days 1 10 %} руб.
+        </p>
+        {% else %}
+        <p class="card-text">Просрочки нет.</p>
+        {% endif %}
+    </div>
+</div>
+{% else %}
+<h1 class="text-danger">Выдача не найдена</h1>
+<p>Выдачи с указанным номером нет.</p>
+{% endif %}
+<a href="{% url 'loans:list' %}" class="btn btn-outline-secondary mt-3">
+    ← к текущим выдачам
+</a>
+{% endblock %}

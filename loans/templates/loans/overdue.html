@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Просроченные выдачи – Учёт выдачи книг{% endblock %}
+
+{% block content %}
+<h1>Просроченные выдачи</h1>
+{% include "loans/includes/loan_menu.html" %}
+<form method="get" class="row g-2 mb-4">
+    <div class="col-auto">
+        <label for="date" class="col-form-label">На дату:</label>
+    </div>
+    <div class="col-auto">
+        <input
+            type="date"
+            id="date"
+            name="date"
+            value="{{ check_date|date:'Y-m-d' }}"
+            class="form-control"
+        >
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-primary">Показать</button>
+    </div>
+</form>
+<h2 class="h5">
+    На {{ check_date|date:"d.m.Y" }} просрочено: {{ loans|length }},
+    штраф всего: {{ total_fine }} руб.
+</h2>
+<div class="table-responsive">
+<table class="table align-middle">
+    <thead>
+        <tr>
+            <th>№</th>
+            <th>Книга</th>
+            <th>Читатель</th>
+            <th>Срок возврата</th>
+            <th>Дней просрочки</th>
+            <th>Штраф, руб.</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for loan in loans %}
+        <tr class="overdue-row">
+            <td><a href="{% url 'loans:detail' loan.id %}">{{ loan.id }}</a></td>
+            <td>{{ loan.book_title }}</td>
+            <td>{{ loan.reader_name }} ({{ loan.ticket }})</td>
+            <td>{{ loan.due_date }}</td>
+            <td>{{ loan.overdue_days }}</td>
+            <td>{{ loan.fine }}</td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="6">Просроченных выдач нет.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

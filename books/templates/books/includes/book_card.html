@@ -1,0 +1,19 @@
+<article class="card book-card mb-3">
+    <div class="card-body d-flex justify-content-between flex-wrap gap-2">
+        <div>
+            <h2 class="h5 card-title">{{ book.title|default:"Без названия" }}</h2>
+            <p class="card-text text-muted">{{ book.author }}</p>
+        </div>
+        <div class="text-end">
+            {% if book.active_loan_id %}
+                <span class="badge bg-warning text-dark loan-status">выдана</span>
+            {% elif show_status %}
+                <span class="badge bg-success loan-status">доступна</span>
+            {% endif %}
+            <a
+                href="{% url 'books:detail' book.id %}"
+                class="btn btn-sm btn-outline-primary ms-2"
+            >Подробнее</a>
+        </div>
+    </div>
+</article>

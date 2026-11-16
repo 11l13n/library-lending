@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}Каталог – Учёт выдачи книг{% endblock %}
+
+{% block content %}
+<h1>Каталог книг</h1>
+{% include "books/includes/book_menu.html" %}
+<p>Всего экземпляров: {{ books|length }}, выдано: {{ issued_count }}</p>
+<input
+    type="search"
+    class="form-control mb-3"
+    placeholder="Быстрый фильтр на этой странице"
+    data-filter-target=".book-card"
+>
+{% for book in books %}
+    {% include "books/includes/book_card.html" with show_status=True %}
+{% empty %}
+    <p>Книги не найдены.</p>
+{% endfor %}
+{% endblock %}
