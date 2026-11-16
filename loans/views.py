@@ -1,121 +1,98 @@
-"""Страницы выдач, читателей и статистики: данные из SQLite."""
+"""Страницы выдач, читателей и статистики."""
 
+from django.core.paginator import Paginator
+from django.db.models import Avg, Count, F, Max, Q, Sum, Value
+from django.db.models.functions import Coalesce, Round, TruncMonth
 from django.shortcuts import render
 from django.utils import timezone
 
-from db.database import fetch_all, fetch_one
+from books.models import Book, Casefold
+from models.loans import FINE_PER_DAY
 from utils import parse_iso_date
+
+from .models import Loan, Reader, days_between, overdue_days_expression
+
+LOAN_ORDERING = {
+    "oldest": ("issue_date", "id"),
+    "newest": ("-issue_date", "-id"),
+    "book": ("book__title", "id"),
+    "reader": ("reader__name", "id"),
+}
 
 
 def loans(request):
-    loans_list = fetch_all("""
-        SELECT
-            loans.id,
-            books.title AS book_title,
-            readers.name AS reader_name,
-            readers.ticket,
-            strftime('%d.%m.%Y', loans.issue_date) AS issue_date,
-            strftime('%d.%m.%Y', date(loans.issue_date, '+14 days'))
-                AS due_date
-        FROM loans
-        JOIN books ON loans.book_id = books.id
-        JOIN readers ON loans.reader_id = readers.id
-        WHERE loans.return_date IS NULL
-        ORDER BY loans.issue_date
-    """)
-    return render(request, "loans/loan_list.html", {"loans": loans_list})
+    queryset = Loan.objects.filter(return_date__isnull=True).select_related(
+        "book", "reader",
+    )
+    issue_date = parse_iso_date(request.GET.get("date"), None)
+    book = request.GET.get("book", "").strip()
+    reader = request.GET.get("reader", "").strip()
+    order = request.GET.get("sort", "oldest")
+    if issue_date:
+        queryset = queryset.filter(issue_date=issue_date)
+    if book:
+        queryset = queryset.alias(
+            folded_book=Casefold("book__title"),
+        ).filter(folded_book__contains=book.casefold())
+    if reader:
+        queryset = queryset.alias(
+            folded_reader=Casefold("reader__name"),
+            folded_ticket=Casefold("reader__ticket"),
+        ).filter(
+            Q(folded_reader__contains=reader.casefold())
+            | Q(folded_ticket__contains=reader.casefold()),
+        )
+    if order not in LOAN_ORDERING:
+        order = "oldest"
+    page = Paginator(queryset.order_by(*LOAN_ORDERING[order]), 10).get_page(
+        request.GET.get("page"),
+    )
+    return render(request, "loans/loan_list.html", {
+        "loans": page.object_list, "page_obj": page, "issue_date": issue_date,
+        "book_query": book, "reader_query": reader, "order": order,
+    })
 
 
 def overdue(request):
     check_date = parse_iso_date(request.GET.get("date"), timezone.localdate())
-    check_text = check_date.isoformat()
-    loans_list = fetch_all(
-        """
-        SELECT
-            loans.id,
-            books.title AS book_title,
-            readers.name AS reader_name,
-            readers.ticket,
-            strftime('%d.%m.%Y', date(loans.issue_date, '+14 days'))
-                AS due_date,
-            CAST(julianday(?) - julianday(loans.issue_date, '+14 days')
-                 AS INTEGER) AS overdue_days,
-            CAST(julianday(?) - julianday(loans.issue_date, '+14 days')
-                 AS INTEGER) * 10 AS fine
-        FROM loans
-        JOIN books ON loans.book_id = books.id
-        JOIN readers ON loans.reader_id = readers.id
-        WHERE (loans.return_date IS NULL OR loans.return_date > ?)
-          AND date(loans.issue_date, '+14 days') < ?
-        ORDER BY overdue_days DESC
-        """,
-        [check_text, check_text, check_text, check_text],
-    )
-    context = {
-        "loans": loans_list,
-        "check_date": check_date,
-        "total_fine": sum(loan["fine"] for loan in loans_list),
-    }
-    return render(request, "loans/overdue.html", context)
+    loans_list = list(Loan.objects.filter(
+        Q(return_date__isnull=True) | Q(return_date__gt=check_date),
+        issue_date__lte=check_date,
+    ).select_related("book", "reader").annotate(
+        overdue_days=overdue_days_expression(
+            Value(check_date), F("issue_date"),
+        ),
+        fine=F("overdue_days") * int(FINE_PER_DAY),
+    ).filter(overdue_days__gt=0).order_by("-overdue_days", "id"))
+    return render(request, "loans/overdue.html", {
+        "loans": loans_list, "check_date": check_date,
+        "total_fine": sum(loan.fine for loan in loans_list),
+    })
 
 
 def loan_detail(request, loan_id):
-    loan = fetch_one(
-        """
-        SELECT
-            loans.id,
-            loans.book_id,
-            books.title AS book_title,
-            books.author,
-            readers.name AS reader_name,
-            readers.ticket,
-            strftime('%d.%m.%Y', loans.issue_date) AS issue_date,
-            strftime('%d.%m.%Y', date(loans.issue_date, '+14 days'))
-                AS due_date,
-            strftime('%d.%m.%Y', loans.return_date) AS return_date,
-            MAX(
-                CAST(julianday(COALESCE(loans.return_date, ?))
-                     - julianday(loans.issue_date, '+14 days') AS INTEGER),
-                0
-            ) AS overdue_days
-        FROM loans
-        JOIN books ON loans.book_id = books.id
-        JOIN readers ON loans.reader_id = readers.id
-        WHERE loans.id = ?
-        """,
-        [timezone.localdate().isoformat(), loan_id],
-    )
-    return render(
-        request,
-        "loans/loan_detail.html",
-        {"loan": loan},
-        status=404 if loan is None else 200,
-    )
+    today = timezone.localdate()
+    loan = Loan.objects.select_related("book", "reader").annotate(
+        overdue_days=overdue_days_expression(
+            Coalesce("return_date", Value(today)), F("issue_date"),
+        ),
+        fine=F("overdue_days") * int(FINE_PER_DAY),
+    ).filter(pk=loan_id).first()
+    return render(request, "loans/loan_detail.html", {"loan": loan},
+                  status=200 if loan else 404)
 
 
 def readers(request):
-    readers_list = fetch_all(
-        """
-        SELECT
-            readers.id,
-            readers.name,
-            readers.ticket,
-            COUNT(loans.id) AS loans_count,
-            COUNT(loans.id) - COUNT(loans.return_date) AS on_hands,
-            COALESCE(SUM(
-                MAX(
-                    CAST(julianday(COALESCE(loans.return_date, ?))
-                         - julianday(loans.issue_date, '+14 days')
-                         AS INTEGER),
-                    0
-                )
-            ), 0) * 10 AS fine
-        FROM readers
-        LEFT JOIN loans ON loans.reader_id = readers.id
-        GROUP BY readers.id, readers.name, readers.ticket
-        ORDER BY loans_count DESC, readers.name
-        """,
-        [timezone.localdate().isoformat()],
+    today = timezone.localdate()
+    overdue_days = overdue_days_expression(
+        Coalesce("loans__return_date", Value(today)), F("loans__issue_date"),
+    )
+    readers_list = Reader.objects.annotate(
+        loans_count=Count("loans"),
+        on_hands=Count("loans", filter=Q(loans__return_date__isnull=True)),
+        fine=Sum(overdue_days, default=0) * int(FINE_PER_DAY),
+    ).order_by("-loans_count", "name", "id").values(
+        "id", "name", "ticket", "loans_count", "on_hands", "fine",
     )
     return render(request, "loans/readers.html", {"readers": readers_list})
 
@@ -125,71 +102,35 @@ def statistics(request):
         min_loans = max(int(request.GET.get("min", 2)), 0)
     except ValueError:
         min_loans = 2
-    summary = fetch_one("""
-        SELECT
-            (SELECT COUNT(*) FROM books) AS books_count,
-            (SELECT COUNT(*) FROM readers) AS readers_count,
-            COUNT(*) AS loans_count,
-            COUNT(*) - COUNT(return_date) AS issued_count
-        FROM loans
-    """)
-    durations = fetch_one("""
-        SELECT
-            ROUND(AVG(julianday(return_date) - julianday(issue_date)), 1)
-                AS avg_days,
-            MAX(julianday(return_date) - julianday(issue_date)) AS max_days
-        FROM loans
-        WHERE return_date IS NOT NULL
-    """)
-    popular_books = fetch_all("""
-        SELECT
-            books.id,
-            books.title,
-            books.author,
-            COUNT(loans.id) AS loans_count
-        FROM books
-        LEFT JOIN loans ON loans.book_id = books.id
-        GROUP BY books.id, books.title, books.author
-        ORDER BY loans_count DESC, books.title
-    """)
-    by_month = fetch_all("""
-        SELECT
-            strftime('%Y-%m', issue_date) AS month,
-            COUNT(*) AS loans_count
-        FROM loans
-        GROUP BY month
-        ORDER BY month
-    """)
-    active_readers = fetch_all(
-        """
-        SELECT
-            readers.name,
-            COUNT(loans.id) AS loans_count
-        FROM readers
-        JOIN loans ON loans.reader_id = readers.id
-        GROUP BY readers.id, readers.name
-        HAVING COUNT(loans.id) > ?
-        ORDER BY loans_count DESC
-        """,
-        [min_loans],
+    summary = Loan.objects.aggregate(
+        loans_count=Count("pk"),
+        issued_count=Count("pk", filter=Q(return_date__isnull=True)),
     )
-    popular_authors = fetch_all("""
-        SELECT
-            books.author,
-            COUNT(loans.id) AS loans_count
-        FROM books
-        JOIN loans ON loans.book_id = books.id
-        GROUP BY books.author
-        HAVING COUNT(loans.id) > 1
-        ORDER BY loans_count DESC
-    """)
-    context = {
-        "summary": summary,
-        "durations": durations,
-        "popular_books": popular_books,
-        "by_month": by_month,
-        "active_readers": active_readers,
-        "min_loans": min_loans,
+    summary.update(books_count=Book.objects.count(),
+                   readers_count=Reader.objects.count())
+    durations = Loan.objects.exclude(return_date=None).annotate(
+        duration_days=days_between(F("return_date"), F("issue_date")),
+    ).aggregate(avg_days=Round(Avg("duration_days"), 1),
+                max_days=Max("duration_days"))
+    popular_books = Book.objects.annotate(
+        loans_count=Count("loans"),
+    ).order_by("-loans_count", "title", "id").values(
+        "id", "title", "author", "loans_count",
+    )
+    by_month = Loan.objects.annotate(month=TruncMonth("issue_date")).values(
+        "month",
+    ).annotate(loans_count=Count("pk")).order_by("month")
+    active_readers = Reader.objects.annotate(
+        loans_count=Count("loans"),
+    ).filter(loans_count__gt=min_loans).order_by(
+        "-loans_count", "id",
+    ).values("name", "loans_count")
+    popular_authors = Book.objects.values("author").annotate(
+        loans_count=Count("loans"),
+    ).filter(loans_count__gt=1).order_by("-loans_count", "author")
+    return render(request, "loans/statistics.html", {
+        "summary": summary, "durations": durations,
+        "popular_books": popular_books, "by_month": by_month,
+        "active_readers": active_readers, "min_loans": min_loans,
         "popular_authors": popular_authors,
-    }
-    return render(request, "loans/statistics.html", context)
+    })

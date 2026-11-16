@@ -60,7 +60,7 @@
         <ul class="list-group mb-4">
         {% for item in by_month %}
             <li class="list-group-item d-flex justify-content-between">
-                {{ item.month }} <span>{{ item.loans_count }}</span>
+                {{ item.month|date:'Y-m' }} <span>{{ item.loans_count }}</span>
             </li>
         {% empty %}
             <li class="list-group-item">Данные отсутствуют.</li>

@@ -1,18 +1,20 @@
-"""Проверка URL, шаблонов и SQL на отдельной временной базе ПР7."""
+"""Проверка URL, шаблонов и ORM на временной базе Django."""
 
 import json
 from datetime import date
 
 import pytest
+from django.core.management import call_command
 from django.test import Client, override_settings
 from django.urls import reverse
 
-from db import database
+from books.models import Book
 from db.import_json import import_all
+from loans.models import Loan, Reader
 
 
 @pytest.fixture
-def client(tmp_path, monkeypatch):
+def client(tmp_path, monkeypatch, orm_db):
     records = {
         "books": [
             {"id": 1, "title": "Мастер и Маргарита", "author": "Булгаков"},
@@ -42,7 +44,7 @@ def client(tmp_path, monkeypatch):
         )
     db_path = tmp_path / "library.sqlite"
     import_all(db_path, *(tmp_path / f"{name}.json" for name in records))
-    monkeypatch.setattr(database, "DB_PATH", db_path)
+    call_command("import_pr7", source=db_path)
     monkeypatch.setattr("django.utils.timezone.localdate",
                         lambda: date(2026, 10, 20))
     with override_settings(ALLOWED_HOSTS=["testserver"]):
@@ -80,7 +82,7 @@ def test_catalog_keeps_books_without_loans(client):
 ])
 def test_search_uses_parameters_and_cyrillic_casefold(client, query, expected):
     response = client.get(reverse("books:search"), {"q": query})
-    assert [book["id"] for book in response.context["books"]] == expected
+    assert [book.pk for book in response.context["books"]] == expected
 
 
 @pytest.mark.parametrize("value,expected", [
@@ -94,7 +96,7 @@ def test_search_uses_parameters_and_cyrillic_casefold(client, query, expected):
 def test_available_books_on_date(client, value, expected):
     response = client.get(reverse("books:available"), {"date": value})
     assert response.status_code == 200
-    assert {book["id"] for book in response.context["books"]} == expected
+    assert {book.pk for book in response.context["books"]} == expected
 
 
 @pytest.mark.parametrize("value,expected,fine", [
@@ -108,7 +110,7 @@ def test_overdue_uses_history_and_due_date_boundary(
     client, value, expected, fine,
 ):
     response = client.get(reverse("loans:overdue"), {"date": value})
-    assert {loan["id"] for loan in response.context["loans"]} == expected
+    assert {loan.pk for loan in response.context["loans"]} == expected
     assert response.context["total_fine"] == fine
 
 
@@ -136,7 +138,7 @@ def test_custom_404_handler(client):
 def test_book_history_and_reader_totals(client):
     response = client.get(reverse("books:detail", kwargs={"book_id": 1}))
     assert len(response.context["history"]) == 2
-    assert response.context["active_loan"]["id"] == 3
+    assert response.context["active_loan"].pk == 3
     response = client.get(reverse("loans:readers"))
     readers = {reader["id"]: reader for reader in response.context["readers"]}
     assert readers[1]["loans_count"] == 3
@@ -162,19 +164,32 @@ def test_statistics_uses_aggregates_and_having(client):
 
 
 def test_empty_database_and_same_day_return(client):
-    conn = database.get_connection()
-    try:
-        with conn:
-            conn.execute("DELETE FROM loans WHERE id != 4")
-        response = client.get(reverse("loans:statistics"))
-        assert response.context["durations"]["avg_days"] == 0
-        assert "нет данных" not in response.content.decode()
-        with conn:
-            conn.execute("DELETE FROM loans")
-            conn.execute("DELETE FROM readers")
-            conn.execute("DELETE FROM books")
-    finally:
-        conn.close()
+    Loan.objects.exclude(pk=4).delete()
+    response = client.get(reverse("loans:statistics"))
+    assert response.context["durations"]["avg_days"] == 0
+    assert "нет данных" not in response.content.decode()
+    Loan.objects.all().delete()
+    Reader.objects.all().delete()
+    Book.objects.all().delete()
     for name in ("books:list", "books:available", "loans:list",
                  "loans:overdue", "loans:readers", "loans:statistics"):
         assert client.get(reverse(name)).status_code == 200
+
+
+def test_loan_filters_sort_and_pagination(client):
+    for number in range(10):
+        book = Book.objects.create(title=f"Мастер {number}", author="Автор")
+        Loan.objects.create(
+            book=book, reader_id=2, issue_date=date(2026, 10, 1),
+        )
+    filters = {
+        "book": "МАСТЕР", "reader": "анНА", "date": "2026-10-01",
+        "sort": "newest",
+    }
+    response = client.get(reverse("loans:list"), filters)
+    page = response.context["page_obj"]
+    assert page.paginator.count == 11
+    assert len(page.object_list) == 10
+    assert "sort=newest&amp;page=2" in response.content.decode()
+    response = client.get(reverse("loans:list"), {**filters, "page": 2})
+    assert [loan.pk for loan in response.context["loans"]] == [3]

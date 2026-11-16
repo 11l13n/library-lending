@@ -3,7 +3,12 @@
 import os
 
 import django
-from django.test.utils import setup_test_environment, teardown_test_environment
+import pytest
+from django.db import transaction
+from django.test.utils import (
+    setup_databases, setup_test_environment,
+    teardown_databases, teardown_test_environment,
+)
 
 
 def pytest_configure():
@@ -14,3 +19,19 @@ def pytest_configure():
 
 def pytest_unconfigure():
     teardown_test_environment()
+
+
+@pytest.fixture(scope="session")
+def django_test_db():
+    config = setup_databases(verbosity=0, interactive=False)
+    try:
+        yield
+    finally:
+        teardown_databases(config, verbosity=0)
+
+
+@pytest.fixture
+def orm_db(django_test_db):
+    with transaction.atomic():
+        yield
+        transaction.set_rollback(True)

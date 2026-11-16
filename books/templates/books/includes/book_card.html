@@ -5,7 +5,7 @@
             <p class="card-text text-muted">{{ book.author }}</p>
         </div>
         <div class="text-end">
-            {% if book.active_loan_id %}
+            {% if book.is_issued %}
                 <span class="badge bg-warning text-dark loan-status">выдана</span>
             {% elif show_status %}
                 <span class="badge bg-success loan-status">доступна</span>

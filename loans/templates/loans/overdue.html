@@ -42,9 +42,9 @@
     {% for loan in loans %}
         <tr class="overdue-row">
             <td><a href="{% url 'loans:detail' loan.id %}">{{ loan.id }}</a></td>
-            <td>{{ loan.book_title }}</td>
-            <td>{{ loan.reader_name }} ({{ loan.ticket }})</td>
-            <td>{{ loan.due_date }}</td>
+            <td>{{ loan.book.title }}</td>
+            <td>{{ loan.reader.name }} ({{ loan.reader.ticket }})</td>
+            <td>{{ loan.due_date|date:'d.m.Y' }}</td>
             <td>{{ loan.overdue_days }}</td>
             <td>{{ loan.fine }}</td>
         </tr>

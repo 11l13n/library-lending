@@ -5,7 +5,34 @@
 {% block content %}
 <h1>Текущие выдачи</h1>
 {% include "loans/includes/loan_menu.html" %}
-<p>Книг на руках у читателей: {{ loans|length }}</p>
+<form method="get" class="row g-2 mb-3">
+    <div class="col-sm">
+        <label class="form-label" for="id_date">Дата выдачи</label>
+        <input class="form-control" type="date" id="id_date" name="date" value="{{ issue_date|date:'Y-m-d' }}">
+    </div>
+    <div class="col-sm">
+        <label class="form-label" for="id_book">Книга</label>
+        <input class="form-control" id="id_book" name="book" value="{{ book_query }}">
+    </div>
+    <div class="col-sm">
+        <label class="form-label" for="id_reader">Читатель или билет</label>
+        <input class="form-control" id="id_reader" name="reader" value="{{ reader_query }}">
+    </div>
+    <div class="col-sm">
+        <label class="form-label" for="id_sort">Сортировка</label>
+        <select class="form-select" id="id_sort" name="sort">
+            <option value="oldest">Сначала ранние</option>
+            <option value="newest"{% if order == 'newest' %} selected{% endif %}>Сначала новые</option>
+            <option value="book"{% if order == 'book' %} selected{% endif %}>По книге</option>
+            <option value="reader"{% if order == 'reader' %} selected{% endif %}>По читателю</option>
+        </select>
+    </div>
+    <div class="col-auto align-self-end">
+        <button class="btn btn-primary" type="submit">Применить</button>
+        <a class="btn btn-outline-secondary" href="{% url 'loans:list' %}">Сбросить</a>
+    </div>
+</form>
+<p>Выдач найдено: {{ page_obj.paginator.count }}</p>
 <div class="table-responsive">
 <table class="table table-hover align-middle">
     <thead>
@@ -22,10 +49,10 @@
     {% for loan in loans %}
         <tr>
             <td><a href="{% url 'loans:detail' loan.id %}">{{ loan.id }}</a></td>
-            <td>{{ loan.book_title }}</td>
-            <td>{{ loan.reader_name }} ({{ loan.ticket }})</td>
-            <td>{{ loan.issue_date }}</td>
-            <td>{{ loan.due_date }}</td>
+            <td>{{ loan.book.title }}</td>
+            <td>{{ loan.reader.name }} ({{ loan.reader.ticket }})</td>
+            <td>{{ loan.issue_date|date:'d.m.Y' }}</td>
+            <td>{{ loan.due_date|date:'d.m.Y' }}</td>
             <td>{% include "loans/includes/loan_status.html" %}</td>
         </tr>
     {% empty %}
@@ -34,4 +61,15 @@
     </tbody>
 </table>
 </div>
+{% if page_obj.has_other_pages %}
+<nav class="d-flex gap-3 align-items-center mb-3" aria-label="Страницы выдач">
+    {% if page_obj.has_previous %}
+        <a href="{% querystring page=page_obj.previous_page_number %}">Назад</a>
+    {% endif %}
+    <span>Страница {{ page_obj.number }} из {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+        <a href="{% querystring page=page_obj.next_page_number %}">Вперёд</a>
+    {% endif %}
+</nav>
+{% endif %}
 {% endblock %}

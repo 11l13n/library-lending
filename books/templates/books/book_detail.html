@@ -16,8 +16,8 @@
             <strong>Состояние:</strong>
             {% if active_loan %}
                 <span class="badge bg-warning text-dark loan-status">выдана</span>
-                читателю {{ active_loan.reader_name }},
-                вернуть до {{ active_loan.due_date }}
+                читателю {{ active_loan.reader.name }},
+                вернуть до {{ active_loan.due_date|date:'d.m.Y' }}
                 (<a href="{% url 'loans:detail' active_loan.id %}">выдача №{{ active_loan.id }}</a>)
             {% else %}
                 <span class="badge bg-success loan-status">доступна для выдачи</span>
@@ -35,9 +35,9 @@
     {% for loan in history %}
         <tr>
             <td><a href="{% url 'loans:detail' loan.id %}">{{ loan.id }}</a></td>
-            <td>{{ loan.reader_name }}</td>
-            <td>{{ loan.issue_date }}</td>
-            <td>{{ loan.return_date|default:"у читателя" }}</td>
+            <td>{{ loan.reader.name }}</td>
+            <td>{{ loan.issue_date|date:'d.m.Y' }}</td>
+            <td>{{ loan.return_date|date:'d.m.Y'|default:"у читателя" }}</td>
         </tr>
     {% empty %}
         <tr><td colspan="4">Книгу ещё не выдавали.</td></tr>
